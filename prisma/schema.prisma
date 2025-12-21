@@ -1,0 +1,625 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 認証・ユーザー管理
+// ============================================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  lots              Lot[]
+  deviations        Deviation[]
+  capas             CAPA[]
+  approvals         Approval[]
+  auditLogs         AuditLog[]
+  contractors       Contractor[]
+  // MVP2
+  changeRequests    ChangeRequest[]
+  complaints        Complaint[]
+  responseTemplates ResponseTemplate[]
+  reminders         Reminder[]
+}
+
+model User {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id])
+  email         String    @unique
+  name          String
+  passwordHash  String
+  role          Role      @default(VIEWER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  createdLots       Lot[]       @relation("LotCreatedBy")
+  releasedLots      Lot[]       @relation("LotReleasedBy")
+  createdDeviations Deviation[] @relation("DeviationCreatedBy")
+  assignedCAPAs     CAPA[]      @relation("CAPAAssignee")
+  createdCAPAs      CAPA[]      @relation("CAPACreatedBy")
+  approvals         Approval[]
+  auditLogs         AuditLog[]
+  // MVP2
+  requestedChanges  ChangeRequest[] @relation("ChangeRequestedBy")
+  approvedChanges   ChangeRequest[] @relation("ChangeApprovedBy")
+  createdComplaints Complaint[]     @relation("ComplaintCreatedBy")
+  reminders         Reminder[]
+
+  // NextAuth
+  accounts Account[]
+  sessions Session[]
+}
+
+enum Role {
+  ADMIN           // 管理者
+  QA              // 品質保証
+  QC              // 品質管理
+  MANUFACTURING   // 製造
+  PROCUREMENT     // 購買/外注管理
+  VIEWER          // 閲覧のみ
+}
+
+// NextAuth Tables
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// ロット管理
+// ============================================
+
+model Lot {
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  lotNumber         String
+  productName       String
+  productCode       String?
+  manufacturingDate DateTime?
+  contractorId      String?
+  contractor        Contractor? @relation(fields: [contractorId], references: [id])
+  status            LotStatus @default(MANUFACTURING)
+  
+  // 出荷判定
+  releaseDecision   ReleaseDecision?
+  releaseComment    String?
+  releaseEvidence   String?    // JSON形式でチェックリスト結果を保存
+  releasedById      String?
+  releasedBy        User?      @relation("LotReleasedBy", fields: [releasedById], references: [id])
+  releasedAt        DateTime?
+  
+  // メタ情報
+  createdById       String
+  createdBy         User       @relation("LotCreatedBy", fields: [createdById], references: [id])
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  isActive          Boolean    @default(true)
+
+  // Relations
+  attachments       LotAttachment[]
+  deviations        Deviation[]
+  // MVP2
+  complaints        Complaint[]
+
+  @@unique([tenantId, lotNumber])
+}
+
+enum LotStatus {
+  MANUFACTURING   // 製造中
+  INSPECTION      // 検査中
+  PENDING_RELEASE // 判定待ち
+  RELEASED        // 出荷OK
+  REJECTED        // 出荷NG
+  ON_HOLD         // 出荷停止
+}
+
+enum ReleaseDecision {
+  APPROVED      // OK
+  CONDITIONAL   // 条件付きOK
+  REJECTED      // NG
+}
+
+model LotAttachment {
+  id          String   @id @default(cuid())
+  lotId       String
+  lot         Lot      @relation(fields: [lotId], references: [id])
+  fileName    String
+  fileType    String
+  filePath    String
+  fileSize    Int
+  description String?
+  uploadedAt  DateTime @default(now())
+}
+
+// ============================================
+// 逸脱管理
+// ============================================
+
+model Deviation {
+  id              String           @id @default(cuid())
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  deviationNumber String
+  lotId           String
+  lot             Lot              @relation(fields: [lotId], references: [id])
+  
+  // 発生情報
+  occurredAt      DateTime
+  discoveryProcess String
+  description     String
+  
+  // 重大度評価
+  severity        Severity
+  shipmentImpact  ShipmentImpact
+  
+  // 封じ込め
+  containment     String?
+  containmentAt   DateTime?
+  
+  // 原因調査
+  rootCause       String?
+  rootCauseAt     DateTime?
+  
+  // ステータス・期限
+  status          DeviationStatus @default(OPEN)
+  dueDate         DateTime?
+  escalatedAt     DateTime?
+  
+  // メタ情報
+  createdById     String
+  createdBy       User            @relation("DeviationCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  isActive        Boolean         @default(true)
+  closedAt        DateTime?
+  closeReason     String?
+
+  // Relations
+  attachments     DeviationAttachment[]
+  capas           CAPA[]
+  // MVP2
+  complaints      Complaint[]
+
+  @@unique([tenantId, deviationNumber])
+}
+
+enum Severity {
+  LOW       // 軽微
+  MEDIUM    // 中程度
+  HIGH      // 重大
+  CRITICAL  // 致命的
+}
+
+enum ShipmentImpact {
+  YES      // 出荷影響あり
+  NO       // 出荷影響なし
+  UNKNOWN  // 不明
+}
+
+enum DeviationStatus {
+  OPEN          // 起票済み
+  CONTAINMENT   // 封じ込め中
+  RCA           // 原因調査中
+  CAPA          // CAPA対応中
+  VERIFICATION  // 有効性確認中
+  CLOSED        // クローズ
+  CANCELLED     // 取消
+}
+
+model DeviationAttachment {
+  id          String    @id @default(cuid())
+  deviationId String
+  deviation   Deviation @relation(fields: [deviationId], references: [id])
+  fileName    String
+  fileType    String
+  filePath    String
+  fileSize    Int
+  description String?
+  uploadedAt  DateTime  @default(now())
+}
+
+// ============================================
+// CAPA（是正・予防処置）
+// ============================================
+
+model CAPA {
+  id                 String     @id @default(cuid())
+  tenantId           String
+  tenant             Tenant     @relation(fields: [tenantId], references: [id])
+  capaNumber         String
+  
+  // 起因
+  sourceType         CAPASourceType
+  deviationId        String?
+  deviation          Deviation? @relation(fields: [deviationId], references: [id])
+  // MVP2: 苦情からのCAPA発行
+  complaintId        String?
+  complaint          Complaint? @relation("ComplaintCAPAs", fields: [complaintId], references: [id])
+  
+  // 内容
+  type               CAPAType
+  description        String
+  
+  // 担当・期限
+  assigneeId         String
+  assignee           User       @relation("CAPAAssignee", fields: [assigneeId], references: [id])
+  dueDate            DateTime
+  
+  // 有効性確認
+  verificationMethod String?
+  verificationPeriod String?    // e.g., "3ヶ月"
+  verificationResult String?
+  verifiedAt         DateTime?
+  
+  // ステータス
+  status             CAPAStatus @default(OPEN)
+  
+  // メタ情報
+  createdById        String
+  createdBy          User       @relation("CAPACreatedBy", fields: [createdById], references: [id])
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  closedAt           DateTime?
+
+  // Relations
+  attachments        CAPAAttachment[]
+
+  @@unique([tenantId, capaNumber])
+}
+
+enum CAPASourceType {
+  DEVIATION   // 逸脱
+  COMPLAINT   // 苦情
+  AUDIT       // 監査指摘
+  TREND       // 傾向分析
+}
+
+enum CAPAType {
+  CORRECTIVE  // 是正（今止める）
+  PREVENTIVE  // 予防（再発させない）
+}
+
+enum CAPAStatus {
+  OPEN          // 起票済み
+  IN_PROGRESS   // 対応中
+  VERIFICATION  // 有効性確認中
+  CLOSED        // クローズ
+  CANCELLED     // 取消
+}
+
+model CAPAAttachment {
+  id          String   @id @default(cuid())
+  capaId      String
+  capa        CAPA     @relation(fields: [capaId], references: [id])
+  fileName    String
+  fileType    String
+  filePath    String
+  fileSize    Int
+  description String?
+  uploadedAt  DateTime @default(now())
+}
+
+// ============================================
+// 承認
+// ============================================
+
+model Approval {
+  id         String       @id @default(cuid())
+  tenantId   String
+  tenant     Tenant       @relation(fields: [tenantId], references: [id])
+  
+  targetType ApprovalTargetType
+  targetId   String
+  
+  decision   ApprovalDecision
+  comment    String?
+  evidence   String?      // JSON形式で根拠チェックリスト結果
+  
+  approverId String
+  approver   User         @relation(fields: [approverId], references: [id])
+  approvedAt DateTime     @default(now())
+}
+
+enum ApprovalTargetType {
+  LOT_RELEASE      // 出荷判定
+  CAPA_CLOSE       // CAPAクローズ
+  DEVIATION_CLOSE  // 逸脱クローズ
+  CHANGE_REQUEST   // 変更承認 (MVP2)
+  COMPLAINT_CLOSE  // 苦情クローズ (MVP2)
+}
+
+enum ApprovalDecision {
+  APPROVED    // 承認
+  REJECTED    // 却下
+  CONDITIONAL // 条件付き承認
+}
+
+// ============================================
+// 委託先/供給者
+// ============================================
+
+model Contractor {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+  name              String
+  type              ContractorType
+  address           String?
+  contactPerson     String?
+  contactEmail      String?
+  contactPhone      String?
+  qualityAgreement  String?  // 品質協定の内容/参照
+  qualityAgreementVersion String?
+  evaluationStatus  EvaluationStatus @default(PENDING)
+  lastAuditDate     DateTime?
+  nextAuditDate     DateTime?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  lots              Lot[]
+}
+
+enum ContractorType {
+  MANUFACTURER  // 製造委託先
+  TESTING       // 試験委託先
+  STORAGE       // 保管委託先
+  SUPPLIER      // 原材料供給者
+}
+
+enum EvaluationStatus {
+  PENDING   // 評価前
+  APPROVED  // 承認済み
+  SUSPENDED // 一時停止
+  REJECTED  // 不適格
+}
+
+// ============================================
+// 監査証跡
+// ============================================
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  tenantId  String
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
+  
+  tableName String
+  recordId  String
+  action    AuditAction
+  
+  before    String?     // JSON
+  after     String?     // JSON
+  reason    String?
+  
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  createdAt DateTime    @default(now())
+
+  @@index([tableName, recordId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  CANCEL
+}
+
+// ============================================
+// 変更管理 (MVP2)
+// ============================================
+
+model ChangeRequest {
+  id              String        @id @default(cuid())
+  tenantId        String
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
+  changeNumber    String
+  type            ChangeType
+  title           String
+  description     String
+  priority        Priority      @default(MEDIUM)
+  
+  // 影響範囲
+  affectedArea    String?       // 影響を受けるエリア/工程
+  affectedLotIds  String[]      // 影響ロットID (配列で複数対応)
+  
+  // ステータス管理
+  status          ChangeStatus  @default(DRAFT)
+  targetDate      DateTime?
+  implementedAt   DateTime?
+  
+  // 作成・承認
+  requestedById   String
+  requestedBy     User          @relation("ChangeRequestedBy", fields: [requestedById], references: [id])
+  approvedById    String?
+  approvedBy      User?         @relation("ChangeApprovedBy", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  
+  // メタ情報
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  isActive        Boolean       @default(true)
+
+  @@unique([tenantId, changeNumber])
+  @@index([status])
+  @@index([requestedById])
+}
+
+enum ChangeType {
+  EQUIPMENT   // 設備変更
+  PROCESS     // 工程変更
+  DOCUMENT    // 文書変更
+  MATERIAL    // 材料変更
+  OTHER       // その他
+}
+
+enum ChangeStatus {
+  DRAFT       // 下書き
+  PENDING     // 承認待ち
+  APPROVED    // 承認済み
+  REJECTED    // 却下
+  IMPLEMENTED // 実施済み
+  CLOSED      // クローズ
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ============================================
+// 苦情・品質情報 (MVP2)
+// ============================================
+
+model Complaint {
+  id                String          @id @default(cuid())
+  tenantId          String
+  tenant            Tenant          @relation(fields: [tenantId], references: [id])
+  complaintNumber   String
+  type              ComplaintType
+  source            String          // 報告元（顧客名など）
+  
+  // 受付情報
+  receivedAt        DateTime
+  description       String
+  severity          Severity
+  
+  // 関連情報
+  lotId             String?
+  lot               Lot?            @relation(fields: [lotId], references: [id])
+  deviationId       String?
+  deviation         Deviation?      @relation(fields: [deviationId], references: [id])
+  
+  // ステータス・対応
+  status            ComplaintStatus @default(RECEIVED)
+  responseDeadline  DateTime?
+  investigation     String?         // 調査結果
+  response          String?         // 顧客回答
+  responseTemplateId String?
+  
+  // 関連CAPA
+  capas             CAPA[]          @relation("ComplaintCAPAs")
+  
+  // 作成者
+  createdById       String
+  createdBy         User            @relation("ComplaintCreatedBy", fields: [createdById], references: [id])
+  
+  // メタ情報
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  closedAt          DateTime?
+  isActive          Boolean         @default(true)
+
+  @@unique([tenantId, complaintNumber])
+  @@index([status])
+  @@index([lotId])
+}
+
+enum ComplaintType {
+  CUSTOMER    // 顧客苦情
+  INTERNAL    // 社内発見
+  EXTERNAL    // 外部機関
+}
+
+enum ComplaintStatus {
+  RECEIVED      // 受付
+  INVESTIGATING // 調査中
+  RESOLVED      // 対処完了
+  CLOSED        // クローズ
+}
+
+// ============================================
+// 回答テンプレート (MVP2)
+// ============================================
+
+model ResponseTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  name        String
+  category    String   // カテゴリ（品質、納期、破損など）
+  content     String   // テンプレート本文
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+}
+
+// ============================================
+// リマインダー (MVP2)
+// ============================================
+
+model Reminder {
+  id          String         @id @default(cuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id])
+  targetType  ReminderTarget
+  targetId    String
+  reminderAt  DateTime
+  message     String
+  isRead      Boolean        @default(false)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+  createdAt   DateTime       @default(now())
+
+  @@index([userId, isRead])
+  @@index([reminderAt])
+}
+
+enum ReminderTarget {
+  DEVIATION
+  CAPA
+  CHANGE
+  COMPLAINT
+}
