@@ -9,8 +9,8 @@ export default withAuth(
     {
         callbacks: {
             authorized: ({ token, req }) => {
-                // Allow access to login page without authentication
-                if (req.nextUrl.pathname.startsWith('/login')) {
+                // Allow access to login and register pages without authentication
+                if (req.nextUrl.pathname.startsWith('/login') || req.nextUrl.pathname.startsWith('/register')) {
                     return true;
                 }
                 // Allow access to API auth routes
