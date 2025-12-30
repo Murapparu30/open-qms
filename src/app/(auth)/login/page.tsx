@@ -116,6 +116,14 @@ export default function LoginPage() {
                 </form>
 
                 <div style={{ marginTop: 'var(--space-6)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-neutral-200)' }}>
+                    <div style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-neutral-600)' }}>
+                            自分専用の場所で試したいですか？
+                        </p>
+                        <a href="/register" className="btn btn-outline btn-sm" style={{ marginTop: 'var(--space-2)' }}>
+                            プライベート環境を作成
+                        </a>
+                    </div>
                     <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-neutral-500)', textAlign: 'center' }}>
                         テストアカウント
                     </p>
