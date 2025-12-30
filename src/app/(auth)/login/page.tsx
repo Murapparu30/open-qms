@@ -2,6 +2,7 @@
 
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { FormEvent, useState, useEffect } from 'react';
 
 export default function LoginPage() {
@@ -120,9 +121,9 @@ export default function LoginPage() {
                         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-neutral-600)' }}>
                             自分専用の場所で試したいですか？
                         </p>
-                        <a href="/register" className="btn btn-outline btn-sm" style={{ marginTop: 'var(--space-2)' }}>
+                        <Link href="/register" className="btn btn-outline btn-sm" style={{ marginTop: 'var(--space-2)' }}>
                             プライベート環境を作成
-                        </a>
+                        </Link>
                     </div>
                 </div>
             </div>
