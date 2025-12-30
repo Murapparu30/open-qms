@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 interface AuditLog {
@@ -37,6 +38,29 @@ export default function AuditLogTable({ logs, pagination }: AuditLogTableProps) 
         const params = new URLSearchParams(searchParams);
         params.set('page', newPage.toString());
         router.push(`${pathname}?${params.toString()}`);
+    };
+
+    const getRecordLink = (tableName: string, recordId: string) => {
+        const lowerTable = tableName.toLowerCase();
+        switch (lowerTable) {
+            case 'deviation':
+                return `/deviations/${recordId}`;
+            case 'lot':
+                return `/lots/${recordId}`;
+            case 'capa':
+                return `/capas/${recordId}`;
+            case 'complaint':
+                return `/complaints/${recordId}`;
+            case 'document':
+                return `/documents/${recordId}`;
+            case 'changerequest':
+            case 'change':
+                return `/changes/${recordId}`;
+            case 'contractor':
+                return `/contractors/${recordId}`;
+            default:
+                return null;
+        }
     };
 
     const formatDetails = (details: any) => {
@@ -84,14 +108,25 @@ export default function AuditLogTable({ logs, pagination }: AuditLogTableProps) 
                                         <td>{log.tableName}</td>
                                         <td>
                                             <span className={`badge badge-sm ${log.action === 'DELETE' ? 'badge-error' :
-                                                    log.action === 'UPDATE' ? 'badge-warning' :
-                                                        log.action === 'APPROVE' ? 'badge-success' :
-                                                            'badge-neutral'
+                                                log.action === 'UPDATE' ? 'badge-warning' :
+                                                    log.action === 'APPROVE' ? 'badge-success' :
+                                                        'badge-neutral'
                                                 }`}>
                                                 {log.action}
                                             </span>
                                         </td>
-                                        <td className="font-mono text-xs">{log.recordId}</td>
+                                        <td className="font-mono text-xs">
+                                            {getRecordLink(log.tableName, log.recordId) ? (
+                                                <Link
+                                                    href={getRecordLink(log.tableName, log.recordId)!}
+                                                    className="link link-primary"
+                                                >
+                                                    {log.recordId}
+                                                </Link>
+                                            ) : (
+                                                log.recordId
+                                            )}
+                                        </td>
                                         <td>
                                             <div className="max-h-20 overflow-y-auto text-xs font-mono whitespace-pre-wrap bg-base-200 p-2 rounded">
                                                 {formatDetails(log.details)}
