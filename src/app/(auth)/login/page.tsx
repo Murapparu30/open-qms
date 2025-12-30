@@ -124,17 +124,6 @@ export default function LoginPage() {
                             プライベート環境を作成
                         </a>
                     </div>
-                    <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-neutral-500)', textAlign: 'center' }}>
-                        テストアカウント
-                    </p>
-                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-neutral-600)', marginTop: 'var(--space-2)' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-                            <div>admin@example.com</div><div>admin123</div>
-                            <div>qa@example.com</div><div>qa123</div>
-                            <div>qc@example.com</div><div>qc123</div>
-                            <div>mfg@example.com</div><div>mfg123</div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
