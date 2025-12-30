@@ -124,6 +124,42 @@ async function main() {
 
     console.log('✓ Created sample lot:', lot.lotNumber);
 
+    // Create linked Deviation and Complaint for Traceability Verification
+    const deviation = await prisma.deviation.upsert({
+        where: { tenantId_deviationNumber: { tenantId: tenant.id, deviationNumber: 'DEV-2025-LINKED' } },
+        update: {},
+        create: {
+            tenantId: tenant.id,
+            deviationNumber: 'DEV-2025-LINKED',
+            lotId: lot.id,
+            occurredAt: new Date(),
+            discoveryProcess: '製造工程',
+            description: 'トレーサビリティ検証用逸脱（苦情とリンク）',
+            severity: 'MEDIUM',
+            shipmentImpact: 'NO',
+            createdById: admin.id,
+        },
+    });
+
+    const complaint = await prisma.complaint.upsert({
+        where: { tenantId_complaintNumber: { tenantId: tenant.id, complaintNumber: 'CPT-2025-LINKED' } },
+        update: {},
+        create: {
+            tenantId: tenant.id,
+            complaintNumber: 'CPT-2025-LINKED',
+            type: 'CUSTOMER',
+            source: '検証用顧客',
+            receivedAt: new Date(),
+            description: 'この苦情は逸脱（DEV-2025-LINKED）に関連しています',
+            severity: 'MEDIUM',
+            createdById: admin.id,
+            deviationId: deviation.id,
+            lotId: lot.id,
+        },
+    });
+
+    console.log('✓ Created linked records for traceability:', deviation.deviationNumber, '<->', complaint.complaintNumber);
+
     console.log('');
     console.log('🎉 Seeding completed!');
     console.log('');

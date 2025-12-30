@@ -32,6 +32,13 @@ model Tenant {
   complaints        Complaint[]
   responseTemplates ResponseTemplate[]
   reminders         Reminder[]
+  // MVP3
+  trainings         Training[]
+  competencies      Competency[]
+  // Attachments
+  attachments       Attachment[]
+  // 文書管理
+  documents         Document[]
 }
 
 model User {
@@ -59,6 +66,16 @@ model User {
   approvedChanges   ChangeRequest[] @relation("ChangeApprovedBy")
   createdComplaints Complaint[]     @relation("ComplaintCreatedBy")
   reminders         Reminder[]
+  // MVP3
+  trainings         Training[]
+  userCompetencies  UserCompetency[]
+  // Attachments
+  attachments       Attachment[]
+  // 文書管理
+  createdDocuments    Document[]        @relation("DocumentCreatedBy")
+  reviewingDocuments  Document[]        @relation("DocumentReviewer")
+  approvedDocuments   Document[]        @relation("DocumentApprovedBy")
+  createdVersions     DocumentVersion[] @relation("VersionCreatedBy")
 
   // NextAuth
   accounts Account[]
@@ -622,4 +639,185 @@ enum ReminderTarget {
   CAPA
   CHANGE
   COMPLAINT
+}
+
+// ============================================
+// 教育記録 (MVP3)
+// ============================================
+
+model Training {
+  id          String         @id @default(cuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id])
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+  title       String         // 教育名
+  type        TrainingType
+  description String?
+  trainedAt   DateTime       // 実施日
+  expiresAt   DateTime?      // 有効期限
+  instructor  String?        // 講師
+  result      TrainingResult @default(COMPLETED)
+  evidence    String?        // 修了証等のファイルパス
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([tenantId])
+}
+
+enum TrainingType {
+  INTERNAL    // 社内教育
+  EXTERNAL    // 外部研修
+  OJT         // OJT
+  E_LEARNING  // Eラーニング
+}
+
+enum TrainingResult {
+  COMPLETED   // 修了
+  FAILED      // 不合格
+  IN_PROGRESS // 受講中
+}
+
+// ============================================
+// 力量管理 (MVP3)
+// ============================================
+
+model Competency {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  name        String   // 力量名（例：製造ライン操作）
+  category    String   // カテゴリ（製造、品質、安全等）
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userCompetencies UserCompetency[]
+
+  @@index([tenantId])
+  @@index([category])
+}
+
+model UserCompetency {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id])
+  competencyId String
+  competency   Competency      @relation(fields: [competencyId], references: [id])
+  level        CompetencyLevel
+  certifiedAt  DateTime?
+  expiresAt    DateTime?
+  certifiedBy  String?         // 認定者
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([userId, competencyId])
+  @@index([userId])
+  @@index([competencyId])
+}
+
+enum CompetencyLevel {
+  NONE        // 未習得
+  LEARNING    // 習得中
+  QUALIFIED   // 資格あり
+  EXPERT      // 熟練者
+}
+
+// ============================================================
+// ファイル添付
+// ============================================================
+
+model Attachment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  fileName    String
+  originalName String
+  filePath    String
+  mimeType    String
+  size        Int      // bytes
+  entityType  String   // DEVIATION, COMPLAINT, CHANGE, CAPA
+  entityId    String
+  uploadedById String
+  uploadedBy  User     @relation(fields: [uploadedById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+}
+
+// ============================================
+// 文書管理
+// ============================================
+
+model Document {
+  id              String           @id @default(cuid())
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  documentNumber  String           // DOC-2025-001
+  title           String
+  category        DocumentCategory
+  description     String?
+  status          DocumentStatus   @default(DRAFT)
+  currentVersion  Int              @default(1)
+  
+  // レビュー・承認
+  reviewerId      String?
+  reviewer        User?            @relation("DocumentReviewer", fields: [reviewerId], references: [id])
+  approvedById    String?
+  approvedBy      User?            @relation("DocumentApprovedBy", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  publishedAt     DateTime?
+  
+  // 有効期限
+  effectiveDate   DateTime?
+  expiresAt       DateTime?
+  reviewDueDate   DateTime?
+  
+  // メタ情報
+  createdById     String
+  createdBy       User             @relation("DocumentCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  isActive        Boolean          @default(true)
+  
+  // Relations
+  versions        DocumentVersion[]
+
+  @@unique([tenantId, documentNumber])
+  @@index([status])
+  @@index([category])
+}
+
+model DocumentVersion {
+  id           String   @id @default(cuid())
+  documentId   String
+  document     Document @relation(fields: [documentId], references: [id])
+  version      Int
+  content      String   // Markdown形式
+  changeReason String?  // 改訂理由
+  createdById  String
+  createdBy    User     @relation("VersionCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([documentId])
+}
+
+enum DocumentCategory {
+  SOP           // 標準作業手順書
+  WI            // 作業指図書
+  SPEC          // 規格書
+  POLICY        // 方針
+  FORM          // 様式
+  OTHER         // その他
+}
+
+enum DocumentStatus {
+  DRAFT         // 下書き
+  IN_REVIEW     // レビュー中
+  APPROVED      // 承認済み
+  PUBLISHED     // 発行済み
+  OBSOLETE      // 廃止
 }

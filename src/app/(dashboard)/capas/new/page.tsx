@@ -46,21 +46,19 @@ function NewCapaForm() {
     const [sourceType, setSourceType] = useState(searchParams.get('sourceType') || 'DEVIATION');
 
     useEffect(() => {
-        // ユーザー一覧を取得（簡易版：ログを取得してユーザー情報から）
-        fetch('/api/deviations?limit=100')
+        // ユーザー一覧を取得
+        fetch('/api/users/assignees')
             .then((res) => res.json())
-            .then((data) => {
-                const devs = data.deviations || [];
-                setDeviations(devs);
-                // ユニークなユーザーを抽出
-                const uniqueUsers = new Map<string, User>();
-                devs.forEach((d: { createdBy: User }) => {
-                    uniqueUsers.set(d.createdBy.name, { id: d.createdBy.name, name: d.createdBy.name });
-                });
-                setUsers(Array.from(uniqueUsers.values()));
-            })
+            .then((data) => setUsers(data.users || []))
             .catch(() => { });
 
+        // 逸脱一覧を取得
+        fetch('/api/deviations?limit=100')
+            .then((res) => res.json())
+            .then((data) => setDeviations(data.deviations || []))
+            .catch(() => { });
+
+        // 苦情一覧を取得
         fetch('/api/complaints?limit=100')
             .then((res) => res.json())
             .then((data) => setComplaints(data.complaints || []))

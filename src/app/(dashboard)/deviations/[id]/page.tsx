@@ -5,6 +5,12 @@ import { authOptions } from '@/lib/auth/authOptions';
 import DashboardLayout from '@/components/common/DashboardLayout';
 import { prisma } from '@/lib/db/prisma';
 import DeviationCloseForm from './DeviationCloseForm';
+import AttachmentWrapper from './AttachmentWrapper';
+
+import DeviationPDFButton from '@/components/reports/DeviationPDFButton';
+import RelatedRecords from '@/components/common/RelatedRecords';
+import StatusBadge from '@/components/common/StatusBadge';
+import { formatDate, formatDateTime } from '@/lib/utils/dateUtils';
 
 async function getDeviation(id: string, tenantId: string) {
     return prisma.deviation.findFirst({
@@ -16,33 +22,12 @@ async function getDeviation(id: string, tenantId: string) {
                 include: { assignee: { select: { name: true } } },
                 orderBy: { createdAt: 'desc' },
             },
-            attachments: { orderBy: { uploadedAt: 'desc' } },
+            complaints: { select: { id: true, complaintNumber: true, status: true, description: true } },
         },
     });
 }
 
-const getSeverityBadge = (severity: string) => {
-    const map: Record<string, { label: string; className: string }> = {
-        LOW: { label: '軽微', className: 'badge badge-neutral' },
-        MEDIUM: { label: '中程度', className: 'badge badge-warning' },
-        HIGH: { label: '重大', className: 'badge badge-error' },
-        CRITICAL: { label: '致命的', className: 'badge badge-error' },
-    };
-    return map[severity] || { label: severity, className: 'badge badge-neutral' };
-};
 
-const getStatusBadge = (status: string) => {
-    const map: Record<string, { label: string; className: string }> = {
-        OPEN: { label: '起票済み', className: 'badge badge-primary' },
-        CONTAINMENT: { label: '封じ込め中', className: 'badge badge-warning' },
-        RCA: { label: '原因調査中', className: 'badge badge-warning' },
-        CAPA: { label: 'CAPA対応中', className: 'badge badge-warning' },
-        VERIFICATION: { label: '有効性確認中', className: 'badge badge-primary' },
-        CLOSED: { label: 'クローズ', className: 'badge badge-success' },
-        CANCELLED: { label: '取消', className: 'badge badge-neutral' },
-    };
-    return map[status] || { label: status, className: 'badge badge-neutral' };
-};
 
 export default async function DeviationDetailPage({
     params,
@@ -57,8 +42,6 @@ export default async function DeviationDetailPage({
 
     if (!deviation) notFound();
 
-    const severity = getSeverityBadge(deviation.severity);
-    const status = getStatusBadge(deviation.status);
     const isOverdue = deviation.dueDate && new Date(deviation.dueDate) < new Date() && deviation.status !== 'CLOSED';
     const canClose = ['ADMIN', 'QA'].includes(session.user.role) && deviation.status !== 'CLOSED';
 
@@ -66,9 +49,6 @@ export default async function DeviationDetailPage({
     const hasContainment = !!deviation.containment;
     const hasRootCause = !!deviation.rootCause;
     const allCapasClosed = deviation.capas.length === 0 || deviation.capas.every(capa => capa.status === 'CLOSED');
-
-    const formatDate = (date: Date | null) => date ? new Date(date).toLocaleDateString('ja-JP') : '-';
-    const formatDateTime = (date: Date | null) => date ? new Date(date).toLocaleString('ja-JP') : '-';
 
     return (
         <DashboardLayout>
@@ -83,8 +63,9 @@ export default async function DeviationDetailPage({
                     </h1>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-                    <span className={severity.className} style={{ padding: '4px 12px' }}>{severity.label}</span>
-                    <span className={status.className} style={{ padding: '4px 12px' }}>{status.label}</span>
+                    <DeviationPDFButton deviation={JSON.parse(JSON.stringify(deviation))} />
+                    <StatusBadge value={deviation.severity} type="severity" />
+                    <StatusBadge value={deviation.status} type="status" />
                     {isOverdue && <span className="badge badge-error">⚠️ 期限超過</span>}
                 </div>
             </div>
@@ -192,6 +173,23 @@ export default async function DeviationDetailPage({
                 </div>
             </div>
 
+
+            {/* Related Records: Complaints */}
+            {
+                deviation.complaints && deviation.complaints.length > 0 && (
+                    <RelatedRecords
+                        title="関連する苦情"
+                        records={deviation.complaints.map(c => ({
+                            id: c.id,
+                            number: c.complaintNumber,
+                            status: c.status,
+                            title: c.description.substring(0, 50) + '...',
+                            link: `/complaints/${c.id}`
+                        }))}
+                    />
+                )
+            }
+
             {/* CAPA Section */}
             <div className="card" style={{ marginTop: 'var(--space-6)' }}>
                 <div className="card-header">
@@ -222,18 +220,14 @@ export default async function DeviationDetailPage({
                                     <tr key={capa.id}>
                                         <td style={{ fontWeight: 'var(--font-weight-medium)' }}>{capa.capaNumber}</td>
                                         <td>
-                                            <span className={capa.type === 'CORRECTIVE' ? 'badge badge-error' : 'badge badge-primary'}>
-                                                {capa.type === 'CORRECTIVE' ? '是正' : '予防'}
-                                            </span>
+                                            <StatusBadge value={capa.type} type="status" />
                                         </td>
                                         <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {capa.description}
                                         </td>
                                         <td>{capa.assignee.name}</td>
                                         <td>
-                                            <span className={capa.status === 'CLOSED' ? 'badge badge-success' : 'badge badge-warning'}>
-                                                {capa.status}
-                                            </span>
+                                            <StatusBadge value={capa.status} type="status" />
                                         </td>
                                     </tr>
                                 ))}
@@ -243,18 +237,23 @@ export default async function DeviationDetailPage({
                 </div>
             </div>
 
+            {/* Attachment Section */}
+            <AttachmentWrapper entityType="DEVIATION" entityId={deviation.id} />
+
             {/* Close Form for QA/ADMIN */}
-            {canClose && (
-                <div style={{ marginTop: 'var(--space-6)' }}>
-                    <DeviationCloseForm
-                        deviationId={deviation.id}
-                        hasContainment={hasContainment}
-                        hasRootCause={hasRootCause}
-                        allCapasClosed={allCapasClosed}
-                    />
-                </div>
-            )}
-        </DashboardLayout>
+            {
+                canClose && (
+                    <div style={{ marginTop: 'var(--space-6)' }}>
+                        <DeviationCloseForm
+                            deviationId={deviation.id}
+                            hasContainment={hasContainment}
+                            hasRootCause={hasRootCause}
+                            allCapasClosed={allCapasClosed}
+                        />
+                    </div>
+                )
+            }
+        </DashboardLayout >
     );
 }
 

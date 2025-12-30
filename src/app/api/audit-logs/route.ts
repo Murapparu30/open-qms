@@ -24,12 +24,23 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    const whereClause = {
+    const userId = searchParams.get('userId');
+    const dateFrom = searchParams.get('dateFrom');
+    const dateTo = searchParams.get('dateTo');
+
+    const whereClause: any = {
         tenantId: session.user.tenantId,
         ...(tableName && { tableName }),
         ...(recordId && { recordId }),
         ...(action && { action }),
+        ...(userId && { userId }),
     };
+
+    if (dateFrom || dateTo) {
+        whereClause.createdAt = {};
+        if (dateFrom) whereClause.createdAt.gte = new Date(dateFrom);
+        if (dateTo) whereClause.createdAt.lte = new Date(dateTo);
+    }
 
     const [logs, total] = await Promise.all([
         prisma.auditLog.findMany({

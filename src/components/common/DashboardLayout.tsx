@@ -34,9 +34,26 @@ const eventNavItems: NavItem[] = [
 ];
 
 const adminNavItems: NavItem[] = [
+    { href: '/admin/users', label: 'ユーザー管理', icon: '👥' },
     { href: '/admin/audit-logs', label: '監査ログ', icon: '📋' },
     { href: '/admin/templates', label: '回答テンプレート', icon: '📝' },
     { href: '/settings', label: '設定', icon: '⚙️' },
+];
+
+// MVP3 ナビゲーション
+const supplyChainNavItems: NavItem[] = [
+    { href: '/contractors', label: '供給者/委託先', icon: '🏭' },
+];
+
+const trainingNavItems: NavItem[] = [
+    { href: '/trainings', label: '教育記録', icon: '📚' },
+    { href: '/competencies', label: '力量マトリクス', icon: '💪' },
+];
+
+// 文書管理
+const documentNavItems: NavItem[] = [
+    { href: '/documents', label: '文書一覧', icon: '📄' },
+    { href: '/documents/new', label: '文書作成', icon: '➕' },
 ];
 
 export default function DashboardLayout({ children }: LayoutProps) {
@@ -101,6 +118,51 @@ export default function DashboardLayout({ children }: LayoutProps) {
                     <div className="nav-section">
                         <div className="nav-section-title">イベント管理</div>
                         {eventNavItems.map((item) => (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={`nav-item ${isActive(item.href) ? 'active' : ''}`}
+                            >
+                                <span className="nav-item-icon">{item.icon}</span>
+                                <span className="nav-item-text">{item.label}</span>
+                            </Link>
+                        ))}
+                    </div>
+
+                    {/* Supply Chain (MVP3) */}
+                    <div className="nav-section">
+                        <div className="nav-section-title">供給者管理</div>
+                        {supplyChainNavItems.map((item) => (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={`nav-item ${isActive(item.href) ? 'active' : ''}`}
+                            >
+                                <span className="nav-item-icon">{item.icon}</span>
+                                <span className="nav-item-text">{item.label}</span>
+                            </Link>
+                        ))}
+                    </div>
+
+                    {/* Training (MVP3) */}
+                    <div className="nav-section">
+                        <div className="nav-section-title">教育/力量</div>
+                        {trainingNavItems.map((item) => (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={`nav-item ${isActive(item.href) ? 'active' : ''}`}
+                            >
+                                <span className="nav-item-icon">{item.icon}</span>
+                                <span className="nav-item-text">{item.label}</span>
+                            </Link>
+                        ))}
+                    </div>
+
+                    {/* 文書管理 */}
+                    <div className="nav-section">
+                        <div className="nav-section-title">文書管理</div>
+                        {documentNavItems.map((item) => (
                             <Link
                                 key={item.href}
                                 href={item.href}
@@ -178,7 +240,18 @@ export default function DashboardLayout({ children }: LayoutProps) {
                             {pathname === '/capas' && 'CAPA一覧'}
                             {pathname === '/capas/new' && 'CAPA作成'}
                             {pathname.startsWith('/capas/') && !pathname.includes('/new') && 'CAPA詳細'}
+                            {pathname === '/admin/users' && 'ユーザー管理'}
                             {pathname === '/admin/audit-logs' && '監査ログ'}
+                            {pathname === '/admin/templates' && '回答テンプレート'}
+                            {pathname === '/contractors' && '供給者/委託先一覧'}
+                            {pathname === '/contractors/new' && '供給者/委託先登録'}
+                            {pathname.startsWith('/contractors/') && !pathname.includes('/new') && '供給者/委託先詳細'}
+                            {pathname === '/trainings' && '教育記録'}
+                            {pathname === '/competencies' && '力量マトリクス'}
+                            {pathname === '/documents' && '文書一覧'}
+                            {pathname === '/documents/new' && '文書作成'}
+                            {pathname.startsWith('/documents/') && !pathname.includes('/new') && pathname.includes('/edit') && '文書編集'}
+                            {pathname.startsWith('/documents/') && !pathname.includes('/new') && !pathname.includes('/edit') && '文書詳細'}
                             {pathname === '/settings' && '設定'}
                         </h1>
                     </div>

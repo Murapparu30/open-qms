@@ -5,6 +5,10 @@ import { authOptions } from '@/lib/auth/authOptions';
 import DashboardLayout from '@/components/common/DashboardLayout';
 import { prisma } from '@/lib/db/prisma';
 import ComplaintActionForm from './ComplaintActionForm';
+import AttachmentWrapper from './AttachmentWrapper';
+import RelatedRecords from '@/components/common/RelatedRecords';
+import StatusBadge from '@/components/common/StatusBadge';
+import { formatDate, formatDateTime } from '@/lib/utils/dateUtils';
 
 async function getComplaint(id: string, tenantId: string) {
     return prisma.complaint.findFirst({
@@ -18,34 +22,6 @@ async function getComplaint(id: string, tenantId: string) {
     });
 }
 
-const getStatusBadge = (status: string) => {
-    const map: Record<string, { label: string; className: string }> = {
-        RECEIVED: { label: '受付', className: 'badge badge-neutral' },
-        INVESTIGATING: { label: '調査中', className: 'badge badge-warning' },
-        RESOLVED: { label: '対処完了', className: 'badge badge-success' },
-        CLOSED: { label: 'クローズ', className: 'badge badge-primary' },
-    };
-    return map[status] || { label: status, className: 'badge badge-neutral' };
-};
-
-const getTypeBadge = (type: string) => {
-    const map: Record<string, string> = {
-        CUSTOMER: '👤 顧客苦情',
-        INTERNAL: '🏭 社内発見',
-        EXTERNAL: '🏢 外部機関',
-    };
-    return map[type] || type;
-};
-
-const getSeverityBadge = (severity: string) => {
-    const map: Record<string, { label: string; className: string }> = {
-        LOW: { label: '軽微', className: 'badge badge-neutral' },
-        MEDIUM: { label: '中程度', className: 'badge badge-warning' },
-        HIGH: { label: '重大', className: 'badge badge-error' },
-        CRITICAL: { label: '致命的', className: 'badge badge-error' },
-    };
-    return map[severity] || { label: severity, className: 'badge badge-neutral' };
-};
 
 export default async function ComplaintDetailPage({
     params,
@@ -60,12 +36,7 @@ export default async function ComplaintDetailPage({
 
     if (!complaint) notFound();
 
-    const status = getStatusBadge(complaint.status);
-    const severity = getSeverityBadge(complaint.severity);
     const canEdit = ['ADMIN', 'QA', 'QC'].includes(session.user.role) && complaint.status !== 'CLOSED';
-
-    const formatDate = (date: Date | null) => date ? new Date(date).toLocaleDateString('ja-JP') : '-';
-    const formatDateTime = (date: Date | null) => date ? new Date(date).toLocaleString('ja-JP') : '-';
 
     return (
         <DashboardLayout>
@@ -80,8 +51,8 @@ export default async function ComplaintDetailPage({
                     </h1>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-                    <span className={severity.className} style={{ padding: '4px 12px' }}>{severity.label}</span>
-                    <span className={status.className} style={{ padding: '4px 12px' }}>{status.label}</span>
+                    <StatusBadge value={complaint.severity} type="severity" />
+                    <StatusBadge value={complaint.status} type="status" />
                 </div>
             </div>
 
@@ -98,7 +69,9 @@ export default async function ComplaintDetailPage({
                                 </tr>
                                 <tr>
                                     <td style={{ padding: 'var(--space-2) 0', color: 'var(--color-neutral-500)' }}>種別</td>
-                                    <td style={{ padding: 'var(--space-2) 0' }}>{getTypeBadge(complaint.type)}</td>
+                                    <td style={{ padding: 'var(--space-2) 0' }}>
+                                        <StatusBadge value={complaint.type} type="type" />
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td style={{ padding: 'var(--space-2) 0', color: 'var(--color-neutral-500)' }}>報告元</td>
@@ -164,6 +137,20 @@ export default async function ComplaintDetailPage({
                     </div>
                 </div>
 
+                {/* Related Records: Deviation */}
+                {complaint.deviation && (
+                    <RelatedRecords
+                        title="関連する逸脱"
+                        records={[{
+                            id: complaint.deviation.id,
+                            number: complaint.deviation.deviationNumber,
+                            status: 'LINKED',
+                            title: complaint.deviation.description.substring(0, 50) + '...',
+                            link: `/deviations/${complaint.deviation.id}`
+                        }]}
+                    />
+                )}
+
                 {/* Related CAPAs */}
                 {complaint.capas.length > 0 && (
                     <div className="card">
@@ -173,7 +160,7 @@ export default async function ComplaintDetailPage({
                                 {complaint.capas.map((capa) => (
                                     <li key={capa.id} style={{ padding: 'var(--space-2) 0', borderBottom: '1px solid var(--color-neutral-100)' }}>
                                         <span style={{ fontWeight: 'var(--font-weight-medium)' }}>{capa.capaNumber}</span>
-                                        <span className="badge badge-neutral" style={{ marginLeft: 'var(--space-2)' }}>{capa.status}</span>
+                                        <div style={{ display: 'inline-block', marginLeft: 'var(--space-2)' }}><StatusBadge value={capa.status} type="status" /></div>
                                     </li>
                                 ))}
                             </ul>
@@ -181,6 +168,9 @@ export default async function ComplaintDetailPage({
                     </div>
                 )}
             </div>
+
+            {/* Attachment Section */}
+            <AttachmentWrapper entityType="COMPLAINT" entityId={complaint.id} />
 
             {/* Action Form */}
             {canEdit && (

@@ -5,6 +5,9 @@ import { authOptions } from '@/lib/auth/authOptions';
 import DashboardLayout from '@/components/common/DashboardLayout';
 import { prisma } from '@/lib/db/prisma';
 import CapaActionForm from './CapaActionForm';
+import AttachmentWrapper from './AttachmentWrapper';
+import StatusBadge from '@/components/common/StatusBadge';
+import { formatDate, formatDateTime } from '@/lib/utils/dateUtils';
 
 async function getCapa(id: string, tenantId: string) {
     return prisma.cAPA.findFirst({
@@ -18,23 +21,6 @@ async function getCapa(id: string, tenantId: string) {
     });
 }
 
-const getStatusBadge = (status: string) => {
-    const map: Record<string, { label: string; className: string }> = {
-        OPEN: { label: 'オープン', className: 'badge badge-neutral' },
-        IN_PROGRESS: { label: '進行中', className: 'badge badge-warning' },
-        VERIFICATION: { label: '有効性確認', className: 'badge badge-primary' },
-        CLOSED: { label: 'クローズ', className: 'badge badge-success' },
-    };
-    return map[status] || { label: status, className: 'badge badge-neutral' };
-};
-
-const getTypeBadge = (type: string) => {
-    const map: Record<string, { label: string; className: string }> = {
-        CORRECTIVE: { label: '是正措置', className: 'badge badge-error' },
-        PREVENTIVE: { label: '予防措置', className: 'badge badge-warning' },
-    };
-    return map[type] || { label: type, className: 'badge badge-neutral' };
-};
 
 export default async function CapaDetailPage({
     params,
@@ -49,12 +35,7 @@ export default async function CapaDetailPage({
 
     if (!capa) notFound();
 
-    const status = getStatusBadge(capa.status);
-    const type = getTypeBadge(capa.type);
     const canEdit = ['ADMIN', 'QA'].includes(session.user.role) && capa.status !== 'CLOSED';
-
-    const formatDate = (date: Date | null) => date ? new Date(date).toLocaleDateString('ja-JP') : '-';
-    const formatDateTime = (date: Date | null) => date ? new Date(date).toLocaleString('ja-JP') : '-';
 
     return (
         <DashboardLayout>
@@ -69,8 +50,8 @@ export default async function CapaDetailPage({
                     </h1>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-                    <span className={type.className} style={{ padding: '4px 12px' }}>{type.label}</span>
-                    <span className={status.className} style={{ padding: '4px 12px' }}>{status.label}</span>
+                    <StatusBadge value={capa.type} type="status" />
+                    <StatusBadge value={capa.status} type="status" />
                 </div>
             </div>
 
@@ -161,6 +142,9 @@ export default async function CapaDetailPage({
                     </div>
                 </div>
             </div>
+
+            {/* Attachment Section */}
+            <AttachmentWrapper entityType="CAPA" entityId={capa.id} />
 
             {/* Action Form */}
             {canEdit && (
